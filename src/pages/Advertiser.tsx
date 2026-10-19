@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "../components/ui/button";
 import { Sidebar } from "../components/shared/Sidebar";
 import { CreateCampaignForm } from "../components/advertiser/CreateCampaignForm";
+import { CreateCampaignWizard } from "../components/advertiser/CreateCampaignWizard";
 import { LogSaleForm } from "../components/advertiser/LogSaleForm";
 import { GrantAccessForm } from "../components/advertiser/GrantAccessForm";
 import { CampaignAnalytics } from "../components/advertiser/CampaignAnalytics";
@@ -32,6 +33,7 @@ interface AdvertiserProps {
 
 const AdvertiserContent: React.FC<AdvertiserProps> = ({ onBack }) => {
   const [activeTab, setActiveTab] = useState("overview");
+  const [createMode, setCreateMode] = useState<"wizard" | "classic">("wizard");
 
   const tabs = [
     { id: "overview", label: "Dashboard Overview", icon: BarChart3 },
@@ -48,7 +50,33 @@ const AdvertiserContent: React.FC<AdvertiserProps> = ({ onBack }) => {
   const renderContent = () => {
     switch (activeTab) {
       case "create-campaign":
-        return <CreateCampaignForm />;
+        return createMode === "wizard" ? (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setCreateMode("classic")}
+                className="text-xs font-semibold text-zinc-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+              >
+                Switch to Quick Single-Page Form →
+              </button>
+            </div>
+            <CreateCampaignWizard />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setCreateMode("wizard")}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+              >
+                ← Switch to Multi-Step Campaign Wizard
+              </button>
+            </div>
+            <CreateCampaignForm />
+          </div>
+        );
       case "brand-customizer":
         return <BrandCustomizer />;
       case "log-sale":
