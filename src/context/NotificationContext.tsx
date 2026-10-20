@@ -1,10 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
 import type { ReactNode } from "react";
 import {
   CheckCircle2,
   XCircle,
   AlertCircle,
   AlertTriangle,
+  Loader2,
   X,
   ExternalLink,
   ArrowRight,
@@ -108,16 +117,16 @@ export function buildLowEscrowNotification(params: {
   };
 }
 
-const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
+export const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const dismissNotification = (id: string) => {
+  const dismissNotification = useCallback((id: string) => {
     setNotifications((prev) => prev.filter((notification) => notification.id !== id));
-  };
+  }, []);
 
-  const clearAllNotifications = () => {
+  const clearAllNotifications = useCallback(() => {
     setNotifications([]);
   };
 
@@ -140,38 +149,63 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     return id;
   };
+  }, []);
+
+  const showNotification = useCallback(
+    (notification: Omit<Notification, "id">): string => {
+      const id = Math.random().toString(36).substring(2, 11);
+      const isPersistent = notification.persistent === true || notification.duration === 0;
+
+      const newNotification: Notification = {
+        ...notification,
+        id,
+        persistent: isPersistent,
+        duration: isPersistent ? 0 : notification.duration ?? 5000,
+      };
+
+      setNotifications((prev) => [...prev, newNotification]);
+      return id;
+    },
+    [],
+  );
 
   // Dedicated helper to trigger persistent low-escrow toast alerts with top-up action
-  const notifyLowEscrowBalance = (params: {
-    campaignName: string;
-    remainingXlm: number;
-    percentageRemaining: number;
-    campaignId?: string;
-    topUpUrl?: string;
-    onTopUp?: () => void;
-  }): string => {
-    return showNotification(buildLowEscrowNotification(params));
-  };
+  const notifyLowEscrowBalance = useCallback(
+    (params: {
+      campaignName: string;
+      remainingXlm: number;
+      percentageRemaining: number;
+      campaignId?: string;
+      topUpUrl?: string;
+      onTopUp?: () => void;
+    }): string => {
+      return showNotification(buildLowEscrowNotification(params));
+    },
+    [showNotification],
+  );
 
   // Automated background evaluation for low escrow balances
-  const checkEscrowBalances = (campaigns: EscrowMonitoredCampaign[]) => {
-    campaigns.forEach((campaign) => {
-      const evalResult = evaluateCampaignEscrowLevel(campaign);
-      if (evalResult.isLowEscrow) {
-        const alreadyNotified = notifications.some(
-          (n) => n.campaignId === campaign.id && n.persistent,
-        );
-        if (!alreadyNotified) {
-          notifyLowEscrowBalance({
-            campaignName: campaign.name,
-            remainingXlm: evalResult.remainingXlm,
-            percentageRemaining: evalResult.percentageRemaining,
-            campaignId: campaign.id,
-          });
+  const checkEscrowBalances = useCallback(
+    (campaigns: EscrowMonitoredCampaign[]) => {
+      campaigns.forEach((campaign) => {
+        const evalResult = evaluateCampaignEscrowLevel(campaign);
+        if (evalResult.isLowEscrow) {
+          const alreadyNotified = notifications.some(
+            (n) => n.campaignId === campaign.id && n.persistent,
+          );
+          if (!alreadyNotified) {
+            notifyLowEscrowBalance({
+              campaignName: campaign.name,
+              remainingXlm: evalResult.remainingXlm,
+              percentageRemaining: evalResult.percentageRemaining,
+              campaignId: campaign.id,
+            });
+          }
         }
-      }
-    });
-  };
+      });
+    },
+    [notifications, notifyLowEscrowBalance],
+  );
 
   return (
     <NotificationContext.Provider
@@ -229,6 +263,50 @@ const ToastItem: React.FC<ToastItemProps> = ({ notification, onDismiss }) => {
   const progressPercent = isAutoDismissible
     ? Math.max(0, Math.min(100, (remainingTime / totalDuration) * 100))
     : 0;
+  const isAutoDismiss = !notification.persistent && (notification.duration ?? 0) > 0;
+  const duration = notification.duration ?? 5000;
+
+  const [remainingTime, setRemainingTime] = useState<number>(duration);
+  const [isPaused, setIsPaused] = useState<boolean>(false);
+  const startTimeRef = useRef<number>(Date.now());
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-dismiss countdown with hover-to-pause
+  useEffect(() => {
+    if (!isAutoDismiss) return;
+
+    if (isPaused) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
+    startTimeRef.current = Date.now();
+    timerRef.current = setTimeout(() => {
+      onDismiss(notification.id);
+    }, remainingTime);
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isAutoDismiss, isPaused, remainingTime, notification.id, onDismiss]);
+
+  const handleMouseEnter = () => {
+    if (!isAutoDismiss) return;
+    const elapsed = Date.now() - startTimeRef.current;
+    setRemainingTime((prev) => Math.max(0, prev - elapsed));
+    setIsPaused(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (!isAutoDismiss) return;
+    setIsPaused(false);
+  };
 
   const getIcon = (type: NotificationType) => {
     switch (type) {
@@ -301,6 +379,17 @@ const ToastItem: React.FC<ToastItemProps> = ({ notification, onDismiss }) => {
         lastTimeRef.current = Date.now();
       }}
       className={`relative overflow-hidden p-4 rounded-2xl border shadow-xl backdrop-blur-md transform transition-all ${getBackgroundColor(
+      initial={{ opacity: 0, y: -16, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
+      transition={{ type: "spring", stiffness: 350, damping: 25 }}
+      role="alert"
+      aria-live="polite"
+      data-testid="notification-toast"
+      data-type={notification.type}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className={`relative p-4 rounded-2xl border shadow-xl backdrop-blur-md overflow-hidden pointer-events-auto ${getBackgroundColor(
         notification.type,
       )} ${notification.persistent ? "ring-2 ring-amber-400/20" : ""}`}
     >
@@ -321,6 +410,15 @@ const ToastItem: React.FC<ToastItemProps> = ({ notification, onDismiss }) => {
                 Processing...
               </span>
             )}
+            {notification.persistent ? (
+              <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
+                Persistent Alert
+              </span>
+            ) : notification.type === "pending" ? (
+              <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 shrink-0">
+                In Progress
+              </span>
+            ) : null}
           </div>
 
           {notification.message && (
@@ -329,6 +427,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ notification, onDismiss }) => {
             </p>
           )}
 
+          {/* Interactive Action: Link or Button to flow */}
           {actionLabel && (
             <div className="mt-3 flex items-center gap-2 pt-1">
               {actionUrl ? (
@@ -374,6 +473,7 @@ const ToastItem: React.FC<ToastItemProps> = ({ notification, onDismiss }) => {
           type="button"
           onClick={() => onDismiss(notification.id)}
           className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors p-1 -mr-1 -mt-1 cursor-pointer"
+          className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors p-1 -mr-1 -mt-1 rounded-lg"
           aria-label="Close notification"
         >
           <X className="w-4 h-4" />
@@ -388,6 +488,22 @@ const ToastItem: React.FC<ToastItemProps> = ({ notification, onDismiss }) => {
               notification.type,
             )}`}
             style={{ width: `${progressPercent}%` }}
+      {/* Visual Progress Indicator for Dismissal Time */}
+      {isAutoDismiss && (
+        <div
+          data-testid="toast-progress-bar"
+          className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100 dark:bg-zinc-800/80 overflow-hidden"
+        >
+          <motion.div
+            initial={{ width: "100%" }}
+            animate={{ width: isPaused ? undefined : "0%" }}
+            transition={{
+              duration: remainingTime / 1000,
+              ease: "linear",
+            }}
+            role="progressbar"
+            aria-label="Dismissal progress"
+            className={`h-full ${getProgressBarColor(notification.type)}`}
           />
         </div>
       )}
@@ -407,6 +523,17 @@ const NotificationContainer: React.FC = () => {
           <div key={notification.id} className="pointer-events-auto">
             <ToastItem notification={notification} onDismiss={dismissNotification} />
           </div>
+    <div
+      aria-label="Notifications"
+      className="fixed top-4 right-4 z-50 space-y-3 max-w-md w-full px-4 sm:px-0 pointer-events-none"
+    >
+      <AnimatePresence mode="popLayout">
+        {notifications.map((notification) => (
+          <ToastItem
+            key={notification.id}
+            notification={notification}
+            onDismiss={dismissNotification}
+          />
         ))}
       </AnimatePresence>
     </div>
