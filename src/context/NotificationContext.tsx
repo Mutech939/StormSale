@@ -1,12 +1,3 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-} from "react";
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import type { ReactNode } from "react";
 import {
@@ -18,7 +9,6 @@ import {
   X,
   ExternalLink,
   ArrowRight,
-  Loader2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -111,10 +101,10 @@ export function buildLowEscrowNotification(params: {
     )}%). Payouts will stall if escrow is exhausted.`,
     persistent: true,
     duration: 0,
+    campaignId: params.campaignId,
     actionLabel: "Top Up Escrow",
     actionUrl: params.topUpUrl || defaultTopUpUrl,
     onAction: params.onTopUp,
-    campaignId: params.campaignId,
   };
 }
 
@@ -129,9 +119,9 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
 
   const clearAllNotifications = useCallback(() => {
     setNotifications([]);
-  };
+  }, []);
 
-  const showNotification = (notification: Omit<Notification, "id">): string => {
+  const showNotification = useCallback((notification: Omit<Notification, "id">): string => {
     const id = Math.random().toString(36).substring(2, 11);
     const isPersistent =
       notification.persistent === true ||
@@ -144,23 +134,6 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
       persistent: isPersistent,
       duration: isPersistent ? 0 : (notification.duration ?? 5000),
       createdAt: Date.now(),
-    };
-
-    setNotifications((prev) => [...prev, newNotification]);
-
-    return id;
-  };
-  }, []);
-
-  const showNotification = useCallback((notification: Omit<Notification, "id">): string => {
-    const id = Math.random().toString(36).substring(2, 11);
-    const isPersistent = notification.persistent === true || notification.duration === 0;
-
-    const newNotification: Notification = {
-      ...notification,
-      id,
-      persistent: isPersistent,
-      duration: isPersistent ? 0 : (notification.duration ?? 5000),
     };
 
     setNotifications((prev) => [...prev, newNotification]);
@@ -228,39 +201,6 @@ interface ToastItemProps {
 }
 
 const ToastItem: React.FC<ToastItemProps> = ({ notification, onDismiss }) => {
-  const [isHovered, setIsHovered] = useState(false);
-  const totalDuration = notification.duration ?? 5000;
-  const isAutoDismissible = !notification.persistent && totalDuration > 0;
-  const [remainingTime, setRemainingTime] = useState(totalDuration);
-  const lastTimeRef = useRef(0);
-
-  useEffect(() => {
-    if (!isAutoDismissible) return;
-
-    lastTimeRef.current = Date.now();
-    const interval = setInterval(() => {
-      if (!isHovered) {
-        const now = Date.now();
-        const delta = now - lastTimeRef.current;
-        setRemainingTime((prev) => {
-          const next = prev - delta;
-          if (next <= 0) {
-            clearInterval(interval);
-            onDismiss(notification.id);
-            return 0;
-          }
-          return next;
-        });
-      }
-      lastTimeRef.current = Date.now();
-    }, 50);
-
-    return () => clearInterval(interval);
-  }, [isAutoDismissible, isHovered, notification.id, onDismiss]);
-
-  const progressPercent = isAutoDismissible
-    ? Math.max(0, Math.min(100, (remainingTime / totalDuration) * 100))
-    : 0;
   const isAutoDismiss = !notification.persistent && (notification.duration ?? 0) > 0;
   const duration = notification.duration ?? 5000;
 
@@ -363,20 +303,6 @@ const ToastItem: React.FC<ToastItemProps> = ({ notification, onDismiss }) => {
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: -16, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.92, transition: { duration: 0.2 } }}
-      transition={{ duration: 0.25, ease: "easeOut" }}
-      role="alert"
-      onMouseEnter={() => {
-        setIsHovered(true);
-        lastTimeRef.current = Date.now();
-      }}
-      onMouseLeave={() => {
-        setIsHovered(false);
-        lastTimeRef.current = Date.now();
-      }}
-      className={`relative overflow-hidden p-4 rounded-2xl border shadow-xl backdrop-blur-md transform transition-all ${getBackgroundColor(
       initial={{ opacity: 0, y: -16, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
@@ -398,23 +324,13 @@ const ToastItem: React.FC<ToastItemProps> = ({ notification, onDismiss }) => {
             <h4 className="font-bold text-sm text-zinc-900 dark:text-white leading-tight">
               {notification.title}
             </h4>
-            {notification.persistent && (
-              <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
-                Persistent Alert
-              </span>
-            )}
-            {notification.type === "pending" && (
-              <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 shrink-0">
-                Processing...
-              </span>
-            )}
             {notification.persistent ? (
               <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 shrink-0">
                 Persistent Alert
               </span>
             ) : notification.type === "pending" ? (
               <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 shrink-0">
-                In Progress
+                Processing...
               </span>
             ) : null}
           </div>
@@ -470,7 +386,6 @@ const ToastItem: React.FC<ToastItemProps> = ({ notification, onDismiss }) => {
         <button
           type="button"
           onClick={() => onDismiss(notification.id)}
-          className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors p-1 -mr-1 -mt-1 cursor-pointer"
           className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors p-1 -mr-1 -mt-1 rounded-lg"
           aria-label="Close notification"
         >
@@ -478,14 +393,6 @@ const ToastItem: React.FC<ToastItemProps> = ({ notification, onDismiss }) => {
         </button>
       </div>
 
-      {/* Visual countdown progress indicator */}
-      {isAutoDismissible && (
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-100 dark:bg-zinc-800/80 overflow-hidden">
-          <div
-            className={`h-full transition-all duration-75 ${getProgressBarColor(
-              notification.type,
-            )}`}
-            style={{ width: `${progressPercent}%` }}
       {/* Visual Progress Indicator for Dismissal Time */}
       {isAutoDismiss && (
         <div
@@ -515,12 +422,6 @@ const NotificationContainer: React.FC = () => {
   if (notifications.length === 0) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2.5 max-w-md w-full px-4 sm:px-0 pointer-events-none">
-      <AnimatePresence mode="popLayout">
-        {notifications.map((notification) => (
-          <div key={notification.id} className="pointer-events-auto">
-            <ToastItem notification={notification} onDismiss={dismissNotification} />
-          </div>
     <div
       aria-label="Notifications"
       className="fixed top-4 right-4 z-50 space-y-3 max-w-md w-full px-4 sm:px-0 pointer-events-none"

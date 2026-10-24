@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "../components/ui/button";
 import { Sidebar } from "../components/shared/Sidebar";
 import { CreateCampaignForm } from "../components/advertiser/CreateCampaignForm";
@@ -54,8 +55,7 @@ const ADVERTISER_TABS = [
 type AdvertiserTab = (typeof ADVERTISER_TABS)[number];
 
 const AdvertiserContent: React.FC<AdvertiserProps> = ({ onBack }) => {
-  const [activeTab, setActiveTab] = useState("overview");
-  const [createMode, setCreateMode] = useState<"wizard" | "classic">("wizard");
+  const [createMode, setCreateMode] = useState<"wizard" | "classic">("classic");
   const [activeTab, setActiveTab] = usePreference<AdvertiserTab>(
     "stormsale.advertiser.tab",
     "overview",

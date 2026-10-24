@@ -32,6 +32,7 @@ interface AffiliateProps {
 
 const AFFILIATE_TABS = [
   "overview",
+  "browse-campaigns",
   "telegram-browser",
   "custom-links",
   "join-campaign",
