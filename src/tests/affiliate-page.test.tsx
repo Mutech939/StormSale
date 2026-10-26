@@ -41,6 +41,9 @@ vi.mock("../components/affiliate/AffiliateOverview", () => ({
     </div>
   ),
 }));
+vi.mock("../components/affiliate/ClickStreamHeatmap", () => ({
+  AffiliateClickStreamHeatmap: () => <div>Click heatmap content</div>,
+}));
 vi.mock("../components/affiliate/TelegramCampaignBrowser", () => ({
   TelegramCampaignBrowser: () => <div>Telegram campaign content</div>,
 }));
@@ -55,6 +58,9 @@ vi.mock("../components/affiliate/BrowseCampaigns", () => ({
 }));
 vi.mock("../components/affiliate/AffiliateSettings", () => ({
   AffiliateSettings: () => <div>Affiliate settings content</div>,
+}));
+vi.mock("../components/affiliate/TelegramAlertsCard", () => ({
+  TelegramAlertsCard: () => <div>Telegram alerts content</div>,
 }));
 vi.mock("../context/NotificationContext", () => ({
   NotificationProvider: ({ children }: { children: React.ReactNode }) => children,
@@ -72,6 +78,8 @@ describe("Affiliate page navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Browse Marketplace" }));
     expect(await screen.findByText("Browse campaigns content")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Click Heatmap" }));
+    expect(await screen.findByText("Click heatmap content")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Telegram Campaigns" }));
     expect(await screen.findByText("Telegram campaign content")).toBeTruthy();
@@ -93,6 +101,7 @@ describe("Affiliate page navigation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Personalized Settings" }));
     expect(await screen.findByText("Affiliate settings content")).toBeTruthy();
+    expect(screen.getByText("Telegram alerts content")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Preferences" }));
     expect(screen.getByText("Affiliate settings content")).toBeTruthy();
 
